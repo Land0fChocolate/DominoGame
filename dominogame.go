@@ -7,15 +7,15 @@ import (
 )
 
 type dominoGame struct {
-	players []player
-	pieces  []dominoPiece
-	grid    dominoGrid
+	players   []player
+	pieces    []dominoPiece
+	grid      dominoGrid
+	turnOrder []int
 }
 
 type player struct {
 	playerNumber int
 	ownedPieces  []dominoPiece
-	turnorder    int
 }
 
 type dominoPiece struct {
@@ -31,16 +31,12 @@ func main() {
 	fmt.Println("-------- Domino Game --------")
 
 	//creating the game and players
-	game := generateGame(pickPlayers())
-
-	//shuffling the pieces
-	gameStart, firstMove := assignPieces(game)
-	turnOrder := generateTurnOrder(firstMove, game.players)
+	game := generateNewGame(pickPlayers())
 
 	//start game
 	fmt.Println("---- Game Start! ----")
-	fmt.Println("turnOrder:", turnOrder)
-	playGame(gameStart, turnOrder)
+	fmt.Println("game.turnOrder:", game.turnOrder)
+	game.playGame()
 	fmt.Println("---- Game End! ----")
 
 	printDebug(game)
@@ -64,7 +60,7 @@ func pickPlayers() int {
 	}
 }
 
-func generateGame(numPlayers int) dominoGame {
+func generateNewGame(numPlayers int) dominoGame {
 	var game dominoGame
 	//build the player objects
 	for i := 1; i < numPlayers+1; i++ {
@@ -78,14 +74,19 @@ func generateGame(numPlayers int) dominoGame {
 		}
 		k++
 	}
+
 	//build a 3x3 grid to start, this will expand as pieces get placed
 	game.grid.grid = [][]string{{"X", "X", "X"}, {"X", "X", "X"}, {"X", "X", "X"}}
+
+	//shuffling the pieces
+	game, firstMove := assignPieces(game)
+	game.turnOrder = generateTurnOrder(firstMove, game.players)
 
 	return game
 }
 
 func assignPieces(gameRaw dominoGame) (dominoGame, int) {
-	var firstTurn int
+	var firstTurn, highestDouble int
 	//pieces will be reshuffled if nobody starts with a double
 	for {
 		game := gameRaw
@@ -94,10 +95,7 @@ func assignPieces(gameRaw dominoGame) (dominoGame, int) {
 			for i := 1; i <= 7; i++ {
 				r := rand.Intn(len(game.pieces) - 1)
 				player.ownedPieces = append(player.ownedPieces, game.pieces[r])
-				//determining which player places the first piece
-				if (game.pieces[r].top == game.pieces[r].bot) && (game.pieces[r].top > firstTurn) {
-					firstTurn = player.playerNumber
-				}
+				firstTurn, highestDouble = firstMove(game.pieces[r], highestDouble, firstTurn, player.playerNumber)
 				game.pieces = remove(game.pieces, r)
 			}
 			game.players[k] = player
@@ -106,6 +104,15 @@ func assignPieces(gameRaw dominoGame) (dominoGame, int) {
 			return game, firstTurn
 		}
 	}
+}
+
+//determining which player places the first piece
+func firstMove(piece dominoPiece, highestDouble, firstTurn, playerNum int) (int, int) {
+	if (piece.top == piece.bot) && (piece.top > highestDouble) {
+		firstTurn = playerNum
+		highestDouble = piece.top
+	}
+	return firstTurn, highestDouble
 }
 
 func remove(s []dominoPiece, i int) []dominoPiece {
@@ -123,14 +130,14 @@ func generateTurnOrder(firstMove int, players []player) (turnOrder []int) {
 	return
 }
 
-func playGame(game dominoGame, turnOrder []int) {
+func (game *dominoGame) playGame() {
 	firstTurn := true
 	var pickedPiece int
 	var newOwnedPieces []dominoPiece
 	var newGrid dominoGrid
 	for {
 		//players place their pieces down in specific turns
-		for _, playerNum := range turnOrder {
+		for _, playerNum := range game.turnOrder {
 			printGrid(game.grid)
 			if firstTurn {
 				//have to place the highest doubles piece for the first turn
@@ -409,26 +416,26 @@ func isSpaceAlreadyOccupied(newGrid dominoGrid, x, y int) (occupied bool) {
 func isSpaceNextToEquivalentEnd(newGrid dominoGrid, y, x int, end string) (spaceViable bool) {
 	fmt.Println("x: ", x, " y: ", y, " end: ", end)
 	//check space above if possible
-	if y != 1{
-		if newGrid.grid[y-2][x-1] == end{
+	if y != 1 {
+		if newGrid.grid[y-2][x-1] == end {
 			return true
 		}
 	}
 	//check space to the right if possible
-	if x != len(newGrid.grid[0]){
-		if newGrid.grid[y-1][x] == end{
+	if x != len(newGrid.grid[0]) {
+		if newGrid.grid[y-1][x] == end {
 			return true
 		}
 	}
 	//check space below if possible
-	if y != len(newGrid.grid){
-		if newGrid.grid[y][x-1] == end{
+	if y != len(newGrid.grid) {
+		if newGrid.grid[y][x-1] == end {
 			return true
 		}
 	}
 	//check space to the left if possible
-	if x != 1{
-		if newGrid.grid[y-1][x-2] == end{
+	if x != 1 {
+		if newGrid.grid[y-1][x-2] == end {
 			return true
 		}
 	}
@@ -469,5 +476,6 @@ func printDebug(game dominoGame) {
 	//printing data for DEBUG
 	fmt.Println("players: ", game.players)
 	fmt.Println("pieces: ", game.pieces)
+	fmt.Println("--- ---------- ---")
 	//printGrid(game.grid)
 }
